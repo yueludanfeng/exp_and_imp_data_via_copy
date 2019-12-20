@@ -1,0 +1,74 @@
+执行 exp_tables.sh 导出
+执行 rm_additional_files.sh 删除为空的文件
+执行 imp_tables.sh 导入文件中的数据到表中 (多次导入,直到不报外键冲突错误)
+	完成之后,对于那些没有主键与唯一键约束的表,会出现数据库重复的问题
+
+(1) A<---B
+
+A B :  A入 B入
+
+B A:   A入
+B A:   B 入
+
+
+(2)A<--B<--C
+
+A B C : A入 B入 C入
+
+A C B:  A入  B入
+		C入
+
+B A C:  A入
+		B入
+		C入
+
+B C A:
+		A入
+		B入
+		C入
+	
+C A B:
+		A入
+		B入
+		C入
+	
+C B A:
+		A入
+		B入
+		C入
+
+		
+所以多次导入,直到没有报外键冲突即可全部导入数据
+
+
+
+* 查找没有主键或者唯一键的表
+ select count(*) from pg_constraint where (contype='p' or contype='u') and conrelid::regclass::varchar like 'tbl_%';
+-[ RECORD 1 ]
+count | 794
+
+imos=# select count(distinct(tablename)) from (select conrelid::regclass::varchar as tablename FROM pg_constraint where (contype='p' or contype='u') and conrelid::regclass::varchar like 'tbl_%' ) t;
+-[ RECORD 1 ]
+count | 615
+
+select count(*) from pg_tables where tablename like 'tbl_%';
+680
+
+
+总数 680
+其中有 615 张表有主键或者唯一键; 65 张表是没有主键且没有唯一键的
+copy(
+select tablename from pg_tables where tablename like 'tbl_%'
+except 
+select distinct(tablename) from 
+	(
+		select conrelid::regclass::varchar as tablename 
+		FROM pg_constraint 
+		where (contype='p' or contype='u') and conrelid::regclass::varchar like 'tbl_%' 
+	) t
+) from '/home/postgres/pgsql/additional_tables.txt';
+
+找到这些表
+然后获得表对应的csv,看是否存在,如果不存在,则删除该表,最后所得,即为需要导入的表(比如最终可能只需要导入60张表)
+
+去重复
