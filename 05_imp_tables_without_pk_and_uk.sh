@@ -4,12 +4,12 @@ PSQL_DIR=/home/postgres/pgsql
 PSQL_BIN=${PSQL_DIR}/bin/psql
 PG_USER=postgres
 DB_NAME=imos
-TABLE_LIST=${PSQL_DIR}/additional_tables.txt
+NO_PK_AND_UK_TABLES=/home/postgres/pgsql/additional_tables.txt
 dbpasswd_conf_file=/usr/local/svconfig/server/conf/dbpasswd.conf
 my_logfile=/var/log/imoslog/common.log
 my_passwd=/usr/local/bin/univpasswd
 my_unipd=/usr/local/bin/unipd
-LOG_FILE=/var/log/imoslog/$0.log
+
 
 export_dbpasswd()
 {
@@ -84,15 +84,24 @@ export_dbpasswd()
 }
 
 
+imp_tables()
+{
+	for line in `cat $NO_PK_AND_UK_TABLES`
+	do
+		file_name=`ls $PSQL_DIR/*.csv | grep $line`
+		if [[ -n "$file_name" ]];then
+			file_name="`basename $file_name`"
+			table_name=${file_name%.csv}
+			$BIN_PSQL -U $PG_USER -d $DB_NAME -qAt -c "copy ${table_name} from '$line' csv delimiter ';'"
+		fi
+	done
+}
 
-for line in `cat $TABLE_LIST`
-do
-	if [[ -n "$line" ]];then
-		table_name=`echo $line`
-		$PSQL_BIN -U $PG_USER -d $DB_NAME -c "delete from ${table_name} t1 where not exists (select 1  from (select min(ctid) min_ctid from ${table_name} group by id) t2 where t2.min_ctid=t1.ctid);" >> $LOG_FILE 2>&1 
-	fi
-done
 
-if [[ $0 -eq 0 ]];then
-	echo "delete repetitive records successfully " | tee -a ${LOG_FILE}
-fi
+main()
+{
+	export_dbpasswd
+	imp_tables
+}
+
+main
